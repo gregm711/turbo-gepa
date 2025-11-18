@@ -342,6 +342,12 @@ Each worker mounts the same cache/log directories (see the Modal docs above) and
 
 Set `TURBOGEPA_CONTROL_PATH` (or pass `--control-dir`) to a shared directory on that volume so workers can drop `stop.json` and heartbeat files there. The first worker that hits the north-star target writes the stop file and everyone else exits as soon as they see it. Use `TURBOGEPA_RUN_ID`/`--run-id` to share a run identifier across processes so the control files stay scoped to a single run.
 
+### Tooling & Debugging Helpers
+
+- `run_turbo_validation(...)` in `examples/aime_benchmark_v2.py` – re-evaluate the best TurboGEPA prompt on a full train/val split with the task LLM only (no Turbo orchestration), to measure true full-dataset quality.
+- `scripts/analyze_turbo_run.py` – inspect a previous TurboGEPA run from `.turbo_gepa/metrics` (time-to-target, total evaluations, LLM calls, mutation counts, best observed shard/quality).
+- `turbo_gepa.distributed.run_local_multiworker` – run multiple TurboGEPA workers as local processes sharing a cache/log/control directory; see `examples/local_multiworker_bench.py` for a concrete 4-worker AIME benchmark.
+
 ### Core Concepts
 
 **Candidate**: A mapping from component names to text (e.g., `{"system_prompt": "You are..."}`)
@@ -366,6 +372,16 @@ Set `TURBOGEPA_CONTROL_PATH` (or pass `--control-dir`) to a shared directory on 
   - Location: `src/turbo_gepa/adapters/dspy_adapter.py`
   - Features: Trace capture, feedback functions, LLM reflection
   - [Documentation](src/turbo_gepa/adapters/README.md)
+
+**Built-in reflection strategies**
+
+TurboGEPA ships with three built-in reflection/spec strategies:
+
+- `incremental_reflection` – small, quality-preserving edits based on recent parent performance
+- `spec_induction` – spec-style prompt induction from example traces
+- `interleaved_thinking` – prompts that enforce alternating `<think>/<answer>` reasoning steps
+
+The AIME Turbo benchmark configuration uses all three strategies by default; you can restrict or re-order them via `Config.reflection_strategy_names`.
 
 ---
 
@@ -669,8 +685,9 @@ config_custom = Config(
 config_custom.scoring_fn = maximize_metric("reward")  # or any callable returning a float
 
 # Prefer faster verification at the cost of a bit more variance? Tune `verification_speed_bias`.
-#   0.0 = strict / slow (final rung uses full-dataset coverage, no intentional skips)
-#   1.0 = aggressive / fast (fastest, loosest checks with partial coverage)
+#   0.0 = strict / slow   (larger confidence margin, more samples before trusting the final rung)
+#   0.3–0.5 = balanced    (good default trade-off for most runs)
+#   0.8–1.0 = fast / aggressive (small margin, early stop on partial coverage)
 config_fast = Config(verification_speed_bias=0.8)
 ```
 
@@ -696,7 +713,7 @@ adapter.config.reflection_strategy_names = (
 )
 ```
 
-The `verification_speed_bias` knob drives all coverage/confidence trade-offs: at `0.0` the final rung uses full-dataset coverage (no examples are intentionally skipped), while higher values relax coverage and confidence requirements so the evaluator can stop earlier. The derived thresholds flow through the rung controller and evaluator automatically, so you only need to set this one field to shift between accuracy-first and speed-first runs.
+The `verification_speed_bias` knob drives all coverage/confidence trade-offs: at `0.0` the final rung uses a conservative confidence margin (more samples, closer to full-dataset coverage), while higher values relax both the required sample count (`min_samples_for_confidence`) and the final-rung confidence **lower bound** (we subtract fewer standard errors from the running mean). The derived thresholds flow through the evaluator automatically, so you only need to set this one field to shift between accuracy-first and speed-first runs.
 
 ### Rung‑Aware Parent Gating (Fair, Fast Promotion)
 
@@ -844,10 +861,10 @@ python examples/aime_benchmark_v2.py \
 
 - For the OSS‑20 / Grok‑4‑fast configuration above, a representative 30‑example AIME run produced the following head‑to‑head comparison:
 
-  | System        | Speed Bias | Islands | Time‑to‑Target (train, 30 ex) | Full‑Val Quality (30 ex) | Parent→Child Evolutions | Total Candidates Explored |
-  | ------------- | ---------- | ------- | ----------------------------- | ------------------------ | ------------------------ | ------------------------- |
-  | GEPA (classic)| n/a        | n/a     | ~657 s                        | ~0.733                   | 3                        | 3                         |
-  | TurboGEPA     | 0.8        | 1       | ~38 s                         | ~0.83                    | 16                       | 17                        |
+  | System        | Speed Bias | Islands | Strategies Used                    | Time‑to‑Target (train, 30 ex) | Full‑Val Quality (30 ex) | Parent→Child Evolutions | Total Candidates Explored |
+  | ------------- | ---------- | ------- | ---------------------------------- | ----------------------------- | ------------------------ | ------------------------ | ------------------------- |
+  | GEPA (classic)| n/a        | n/a     | 1 (single reflection heuristic)   | ~657 s                        | ~0.733                   | 3                        | 3                         |
+  | TurboGEPA     | 0.8        | 1       | 3 (incremental, spec, interleaved)| ~38 s                         | ~0.83                    | 16                       | 17                        |
 
   - GEPA numbers are taken from the original AIME benchmark configuration (30 examples, target 0.733), where GEPA reached the target in ~657 s with ~0.733 held‑out quality and three prompt evolutions.
   - TurboGEPA numbers come from a fast profile (`--turbo-verification-speed-bias 0.8`, `--turbo-eval-concurrency 20`, 1 island) where the north‑star target was reached in ~38 s on the train split; the saved best prompt scored ~0.83 on a full 30‑example validation pass. Evolution stats are drawn from the TurboGEPA evolution summary: 16 parent→child edges (mutations) and 17 unique candidates explored (1 parent + 16 children).
