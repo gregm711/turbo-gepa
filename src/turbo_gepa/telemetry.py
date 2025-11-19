@@ -134,7 +134,7 @@ class TelemetryCollector:
             queue_ready=queue_ready,
             queue_mutation=queue_mutation,
             queue_replay=queue_replay,
-            straggler_count=stragglers,
+            straggler_count=straggler_count,
             latency_p50=p50,
             latency_p95=p95,
             error_rate=err_rate,

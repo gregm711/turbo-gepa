@@ -62,3 +62,17 @@ def generate_markdown_report(orchestrator: Orchestrator) -> str:
             "| Strategy | Count |",
             "| :--- | :--- |",
         ])
+        for op, count in ops.items():
+            lines.append(f"| {op} | {count} |")
+        lines.append("")
+
+    # Cost Analysis
+    cost = metrics.get('total_cost_usd', 0.0)
+    lines.extend([
+        "## 💰 Cost Analysis",
+        "",
+        f"- **Estimated Total Cost**: ${cost:.4f}",
+        "",
+    ])
+
+    return "\n".join(lines)

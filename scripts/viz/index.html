@@ -519,7 +519,7 @@
                             }
                             
                             // Runtime fallback if no telemetry
-                            if (!latestTelem && data.evolution.timeline?.length) {
+                            if (telemetryList.length === 0 && data.evolution.timeline?.length) {
                                 const lastSnap = data.evolution.timeline[data.evolution.timeline.length - 1];
                                 const diff = lastSnap.elapsed || 0;
                                 const mins = Math.floor(diff / 60).toString().padStart(2, '0');
