@@ -342,8 +342,18 @@ Each worker mounts the same cache/log directories (see the Modal docs above) and
 
 Set `TURBOGEPA_CONTROL_PATH` (or pass `--control-dir`) to a shared directory on that volume so workers can drop `stop.json` and heartbeat files there. The first worker that hits the north-star target writes the stop file and everyone else exits as soon as they see it. Use `TURBOGEPA_RUN_ID`/`--run-id` to share a run identifier across processes so the control files stay scoped to a single run.
 
+Need a turnkey Modal deployment? See `examples/modal_turbo_aime.py` for a distributed benchmark that mounts a Modal Volume, forwards OpenRouter secrets, and orchestrates workers via `turbo-gepa-worker`.
+
 ### Tooling & Debugging Helpers
 
+- **Live Visualization Dashboard**: Monitor your run in real-time with a rich UI.
+  ```bash
+  # Local
+  python scripts/viz_server.py
+  
+  # Modal (remote)
+  modal serve scripts/modal_progress_server.py
+  ```
 - `run_turbo_validation(...)` in `examples/aime_benchmark_v2.py` – re-evaluate the best TurboGEPA prompt on a full train/val split with the task LLM only (no Turbo orchestration), to measure true full-dataset quality.
 - `scripts/analyze_turbo_run.py` – inspect a previous TurboGEPA run from `.turbo_gepa/metrics` (time-to-target, total evaluations, LLM calls, mutation counts, best observed shard/quality).
 - `turbo_gepa.distributed.run_local_multiworker` – run multiple TurboGEPA workers as local processes sharing a cache/log/control directory; see `examples/local_multiworker_bench.py` for a concrete 4-worker AIME benchmark.
@@ -1012,4 +1022,3 @@ TurboGEPA's contributions are limited to **performance engineering**:
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Studio-Intrinsic/turbo-gepa&type=date&legend=top-left)](https://www.star-history.com/#Studio-Intrinsic/turbo-gepa&type=date&legend=top-left)
-Need a turnkey Modal deployment? See `examples/modal_turbo_aime.py` for a distributed benchmark that mounts a Modal Volume, forwards OpenRouter secrets, and orchestrates workers via `turbo-gepa-worker`.
