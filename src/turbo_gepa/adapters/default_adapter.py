@@ -861,11 +861,18 @@ class DefaultAdapter:
         }
         if best_meta:
             result["run_metadata"] = best_meta
+            # Promote key fields to top-level for convenience
+            result["best_quality"] = best_meta.get("best_quality", 0.0)
+            result["best_quality_shard"] = best_meta.get("best_quality_shard")
+            result["best_prompt"] = best_meta.get("best_prompt")
             best_metrics = best_meta.get("metrics") if isinstance(best_meta, dict) else None
             if isinstance(best_metrics, dict):
                 result["metrics"]["best"] = best_metrics
         else:
             result["run_metadata"] = {}
+            result["best_quality"] = 0.0
+            result["best_quality_shard"] = None
+            result["best_prompt"] = None
         return result
 
     def _build_run_metadata(
@@ -1427,14 +1434,19 @@ class DefaultAdapter:
 
         pareto_entries = orchestrator.archive.pareto_entries()
         pareto = [entry.candidate for entry in pareto_entries]
+        run_metadata = self._build_run_metadata(orchestrator, pareto_entries)
         return {
             "pareto": pareto,
             "pareto_entries": pareto_entries,
             "qd_elites": [],  # Deprecated field kept for compatibility; always empty
             "evolution_stats": orchestrator.evolution_snapshot(include_edges=True),
             "lineage": orchestrator.get_candidate_lineage_data(),
-            "run_metadata": self._build_run_metadata(orchestrator, pareto_entries),
+            "run_metadata": run_metadata,
             "metrics": orchestrator.metrics_snapshot(),
+            # Promote key fields to top-level for convenience
+            "best_quality": run_metadata.get("best_quality", 0.0),
+            "best_quality_shard": run_metadata.get("best_quality_shard"),
+            "best_prompt": run_metadata.get("best_prompt"),
         }
 
     async def _optimize_staged_temperature(
@@ -1497,6 +1509,10 @@ class DefaultAdapter:
                 "evolution_stats": self._combine_evolution_snapshots([phase1_stats]),
                 "run_metadata": phase1_metadata,
                 "metrics": phase1_metadata.get("metrics"),
+                # Promote key fields to top-level for convenience
+                "best_quality": phase1_metadata.get("best_quality", 0.0),
+                "best_quality_shard": phase1_metadata.get("best_quality_shard"),
+                "best_prompt": phase1_metadata.get("best_prompt"),
             }
 
         # Early exit if no pareto frontier
@@ -1510,6 +1526,10 @@ class DefaultAdapter:
                 "evolution_stats": self._combine_evolution_snapshots([phase1_stats]),
                 "run_metadata": phase1_metadata,
                 "metrics": phase1_metadata.get("metrics"),
+                # Promote key fields to top-level for convenience
+                "best_quality": phase1_metadata.get("best_quality", 0.0),
+                "best_quality_shard": phase1_metadata.get("best_quality_shard"),
+                "best_prompt": phase1_metadata.get("best_prompt"),
             }
 
         # Take top K prompts sorted by quality
@@ -1563,6 +1583,10 @@ class DefaultAdapter:
             "metrics": phase2_metadata.get("metrics"),
             "phase1_metrics": phase1_metadata.get("metrics"),
             "phase2_metrics": phase2_metadata.get("metrics"),
+            # Promote key fields to top-level for convenience
+            "best_quality": phase2_metadata.get("best_quality", 0.0),
+            "best_quality_shard": phase2_metadata.get("best_quality_shard"),
+            "best_prompt": phase2_metadata.get("best_prompt"),
         }
 
     async def _optimize_multi_island(
