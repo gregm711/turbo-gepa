@@ -166,17 +166,37 @@ class DSpyAdapter:
             if num_mutations <= 0 or not parent_contexts:
                 return []
             proposals: list[str] = []
+
+            # Get reflection examples from mutator (set by orchestrator via set_reflection_examples)
+            reflection_examples = getattr(self.mutator, "_reflection_examples", [])
+
             for ctx in parent_contexts:
                 candidate = ctx.get("candidate")
                 if candidate is None:
                     continue
-                failures = ctx.get("failures", []) or []
-                traces: list[dict] = []
-                for _example_id, trace_list in failures:
-                    traces.extend(trace_list)
+
+                # Prefer full traces captured during evaluation; fallback to any cached reflection examples.
+                ctx_traces = list(ctx.get("traces") or [])
+                candidate_traces = ctx_traces[:5] if ctx_traces else reflection_examples[:5]
+
+                # Filter for traces that include the DSPy trace + prediction needed for feedback_map.
+                usable_traces = [
+                    trace
+                    for trace in candidate_traces
+                    if isinstance(trace, dict) and trace.get("trace") and trace.get("prediction")
+                ]
+                if not usable_traces:
+                    logging.debug(
+                        "No usable traces for reflection (ctx_traces=%s, reflection_examples=%s)",
+                        len(ctx_traces),
+                        len(reflection_examples),
+                    )
+                    continue
+
                 try:
-                    mutated = await self.reflection_runner(traces, candidate.text)
-                except RuntimeError:
+                    mutated = await self.reflection_runner(usable_traces, candidate.text)
+                except RuntimeError as e:
+                    logging.warning(f"Reflection runner failed: {e}")
                     continue
                 if not mutated:
                     continue
