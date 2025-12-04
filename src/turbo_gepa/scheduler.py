@@ -329,6 +329,7 @@ class BudgetedScheduler:
                 "   ✅ ASHA: Final rung coverage=%.1f%%, samples=%s, score=%.1f%% (parent_thresh=%.1f%%)",
                 (result.coverage_fraction or 0.0) * 100,
                 result.n_examples,
+                score * 100,
                 (parent_score_at_rung - tolerance) * 100,
             )
             return "completed"
